@@ -247,12 +247,20 @@ async def generate_images():
                     # 3. Select '1x' layout inside the panel
                     try:
                         x1_btns = page.get_by_text("x1", exact=True)
-                        if await x1_btns.count() > 0:
-                            await x1_btns.first.click(timeout=2000, force=True)
-                        else:
+                        clicked_x1 = False
+                        # Find the first VISIBLE x1 button (usually the image gen one)
+                        for i in range(await x1_btns.count()):
+                            if await x1_btns.nth(i).is_visible():
+                                await x1_btns.nth(i).click(timeout=2000)
+                                clicked_x1 = True
+                                break
+                        
+                        if not clicked_x1:
                             alt_btns = page.get_by_text("1x", exact=True)
-                            if await alt_btns.count() > 0:
-                                await alt_btns.first.click(timeout=2000, force=True)
+                            for i in range(await alt_btns.count()):
+                                if await alt_btns.nth(i).is_visible():
+                                    await alt_btns.nth(i).click(timeout=2000)
+                                    break
                     except Exception as e:
                         print("Failed to click x1:", e)
                     
@@ -261,9 +269,15 @@ async def generate_images():
                     # 4. Click the 'Save' button to apply the change
                     try:
                         save_btns = page.get_by_text("Save", exact=True)
-                        if await save_btns.count() > 0:
-                            await save_btns.last.click(timeout=2000, force=True)
-                        else:
+                        clicked_save = False
+                        # Reverse iteration to find the latest visible save button inside the panel
+                        for i in reversed(range(await save_btns.count())):
+                            if await save_btns.nth(i).is_visible():
+                                await save_btns.nth(i).click(timeout=2000)
+                                clicked_save = True
+                                break
+                                
+                        if not clicked_save:
                             await page.keyboard.press("Escape")
                     except Exception as e:
                         print("Failed to click Save:", e)
