@@ -199,10 +199,10 @@ async def generate_images():
                     except: pass
                     
                 if not settings_btn:
-                    settings_btn = svg_btns.nth(count - 2 if count >= 3 else 1)
-                    
-                await settings_btn.click(timeout=3000, force=True)
-                await page.wait_for_timeout(1000)
+                    print("Could not find the settings button. Skipping enforcement to avoid clicking wrong elements.")
+                else:
+                    await settings_btn.click(timeout=3000, force=True)
+                    await page.wait_for_timeout(1000)
                 
                 try:
                     qty_btns = page.locator('button, [role="button"], [role="radio"], [role="option"]').filter(
@@ -244,17 +244,7 @@ async def generate_images():
                 print(f"Failed to enter text into prompt box! Error: {e}")
                 continue
             
-            # 2. Emulate pressing Enter or clicking the Send Arrow
-            try:
-                # Attempt to click the submit button (last SVG button on the screen)
-                svg_btns = page.locator('button, [role="button"]')
-                count = await svg_btns.count()
-                if count > 0:
-                    await svg_btns.nth(count - 1).click(force=True, timeout=2000)
-            except:
-                pass
-            
-            # Unconditionally press Enter as a robust fallback for chat boxes
+            # 2. Emulate pressing Enter to submit
             await page.keyboard.press("Enter")
             
             # 3. Wait for generation
