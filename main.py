@@ -228,14 +228,15 @@ async def generate_images():
                     await page.wait_for_timeout(1000)
                     
                     # 3. Select '1x' layout inside the panel
+                    # Note: There controls for both Image and Video ('x1' appears twice). We want the first one (Image).
                     qty_btns = page.locator('button, [role="button"], [role="radio"]').filter(
                         has_text=re.compile(r"^\s*x1\s*$|^\s*1x?\s*$|^\s*1 image\s*$", re.IGNORECASE)
                     )
                     if await qty_btns.count() > 0:
-                        await qty_btns.last.click(timeout=1000, force=True)
+                        await qty_btns.first.click(timeout=1000, force=True)
                     else:
                         try:
-                            await page.get_by_text("x1", exact=True).last.click(timeout=1000, force=True)
+                            await page.get_by_text("x1", exact=True).first.click(timeout=1000, force=True)
                         except: pass
                     
                     await page.wait_for_timeout(500)
