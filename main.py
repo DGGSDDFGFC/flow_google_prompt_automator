@@ -319,9 +319,11 @@ async def generate_images():
             started_generating = False
             for _ in range(30): # Max 15 seconds
                 has_stop = await page.evaluate('''() => {
-                    const btns = Array.from(document.querySelectorAll('button'));
-                    return btns.some(b => (b.getAttribute('aria-label') || '').toLowerCase().includes('stop') ||
-                                          (b.getAttribute('title') || '').toLowerCase().includes('stop'));
+                    const els = Array.from(document.querySelectorAll('[aria-label], [title]'));
+                    return els.some(e => {
+                        const l = (e.getAttribute('aria-label') || e.getAttribute('title') || '').toLowerCase();
+                        return l.includes('stop') || l.includes('cancel');
+                    });
                 }''')
                 if has_stop:
                     started_generating = True
@@ -332,9 +334,11 @@ async def generate_images():
                 print("Generating... Waiting for completion...")
                 for _ in range(360): # Max 3 minutes
                     still_generating = await page.evaluate('''() => {
-                        const btns = Array.from(document.querySelectorAll('button'));
-                        return btns.some(b => (b.getAttribute('aria-label') || '').toLowerCase().includes('stop') ||
-                                              (b.getAttribute('title') || '').toLowerCase().includes('stop'));
+                        const els = Array.from(document.querySelectorAll('[aria-label], [title]'));
+                        return els.some(e => {
+                            const l = (e.getAttribute('aria-label') || e.getAttribute('title') || '').toLowerCase();
+                            return l.includes('stop') || l.includes('cancel');
+                        });
                     }''')
                     if not still_generating:
                         print("Generation finished visually! Waiting 4 seconds for images to settle...")
