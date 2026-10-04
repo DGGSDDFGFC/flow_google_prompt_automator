@@ -116,59 +116,76 @@ async def generate_images():
         if instructions:
             print("Entering global instructions into the instruction tab...")
             try:
-                svg_btns = page.locator('button, [role="button"]')
-                count = await svg_btns.count()
+                # 1. Use the input box as a geographic anchor
+                prompt_input = page.locator('div[contenteditable="true"]:visible, textarea:visible, input[type="text"]:visible').last 
+                await prompt_input.wait_for(state="visible", timeout=10000)
                 
-                inst_btn = None
-                for i in range(count):
-                    try:
-                        btn = svg_btns.nth(i)
-                        if not await btn.is_visible(): continue
-                        lbl = (await btn.get_attribute('aria-label') or await btn.get_attribute('title') or await btn.get_attribute('data-tooltip') or "").lower()
-                        if any(kw in lbl for kw in ["style", "reference", "advanced", "magic", "instruct", "document"]):
-                            inst_btn = btn
-                            print(f" -> Auto-detected Instruction button: '{lbl}'")
-                            break
-                    except: pass
+                # 2. Run browser-side JS to find the Instruct button on the same row
+                inst_btn_index = await page.evaluate('''() => {
+                    const inputDoms = Array.from(document.querySelectorAll('div[contenteditable="true"], textarea, input[type="text"]'))
+                        .filter(e => e.offsetHeight > 0 && e.offsetWidth > 0);
+                    if (inputDoms.length === 0) return -1;
+                    const mainInput = inputDoms[inputDoms.length - 1]; // The chat box
+                    const inputRect = mainInput.getBoundingClientRect();
+                    
+                    const allBtns = Array.from(document.querySelectorAll('button, [role="button"]'))
+                        .filter(e => e.offsetHeight > 0 && e.offsetWidth > 0);
+                        
+                    // Get buttons strictly on the same horizontal row (+/- 50px of center)
+                    const rowBtns = allBtns.filter(b => {
+                        const r = b.getBoundingClientRect();
+                        return Math.abs((r.top + r.height/2) - (inputRect.top + inputRect.height/2)) < 50;
+                    });
+                    
+                    rowBtns.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+                    
+                    // Find by explicit keyword first
+                    let targetBtn = rowBtns.find(b => {
+                        const lbl = (b.getAttribute('aria-label') || b.getAttribute('title') || b.innerText || '').toLowerCase();
+                        return ["style", "reference", "advanced", "magic", "instruct", "document", "context", "prompt"].some(kw => lbl.includes(kw));
+                    });
+                    
+                    // Fallback visually: In [+, Instruct, Settings, Send], Instruct is the second button
+                    if (!targetBtn && rowBtns.length >= 2) {
+                        targetBtn = rowBtns[1]; // Index 1 is the second button from left
+                    }
+                    
+                    return allBtns.indexOf(targetBtn);
+                }''')
                 
-                if not inst_btn:
-                    print("Could not reliably identify Instruction button. Printing all visible buttons for debugging:")
-                    for i in range(count):
-                        try:
-                            btn = svg_btns.nth(i)
-                            if await btn.is_visible():
-                                lbl = await btn.get_attribute('aria-label') or await btn.get_attribute('title') or ""
-                                if lbl: print(f"  - {lbl}")
-                        except: pass
-                    inst_btn = svg_btns.nth(count - 3 if count >= 3 else 0)
-                
-                await inst_btn.click(timeout=5000)
-                await page.wait_for_timeout(1500)
-                
-                # --- NEW UI LOGIC based on screenshot ---
-                # Click + Add instruction if it exists
-                add_inst_btn = page.get_by_text("Add instruction", exact=False).first
-                if await add_inst_btn.is_visible():
-                    await add_inst_btn.click(timeout=3000)
-                    await page.wait_for_timeout(500)
-                
-                # Find the instruction text box in the panel
-                inst_input = page.locator('textarea:visible, div[contenteditable="true"]:visible').first
-                await inst_input.click(timeout=3000, force=True)
-                await page.keyboard.press("Control+A")
-                await page.keyboard.press("Backspace")
-                await page.keyboard.type(instructions, delay=5)
-                
-                # Click Done to save and close the panel
-                done_btn = page.get_by_text("Done", exact=True).first
-                if await done_btn.is_visible():
-                    await done_btn.click(timeout=3000, force=True)
+                if inst_btn_index != -1:
+                    inst_btn = page.locator('button, [role="button"]').nth(inst_btn_index)
+                    await inst_btn.click(timeout=5000, force=True)
+                    await page.wait_for_timeout(1500)
+                    
+                    # Click + Add instruction if it exists
+                    add_inst_btn = page.get_by_text("Add instruction", exact=False).first
+                    if await add_inst_btn.is_visible():
+                        await add_inst_btn.click(timeout=3000)
+                        await page.wait_for_timeout(500)
+                    
+                    # SAFETY CHECK: Ensure the instruction panel actually generated a new text box
+                    all_text_inputs = page.locator('textarea:visible, div[contenteditable="true"]:visible')
+                    if await all_text_inputs.count() < 2:
+                        print("Instruction panel did not appear to open (no secondary text box detected). Skipping global instructions to avoid polluting the chat box.")
+                    else:
+                        inst_input = all_text_inputs.first
+                        await inst_input.click(timeout=3000, force=True)
+                        await page.keyboard.press("Control+A")
+                        await page.keyboard.press("Backspace")
+                        await page.keyboard.type(instructions, delay=5)
+                        
+                        done_btn = page.get_by_text("Done", exact=True).first
+                        if await done_btn.is_visible():
+                            await done_btn.click(timeout=3000, force=True)
+                        else:
+                            await inst_btn.click(force=True) # Fallback close
+                        
+                        await page.keyboard.press("Escape")
+                        await page.wait_for_timeout(1000)
+                        print("Successfully entered global instructions.")
                 else:
-                    await inst_btn.click(force=True) # Fallback close
-                
-                await page.keyboard.press("Escape")
-                await page.wait_for_timeout(1000)
-                print("Successfully entered global instructions.")
+                    print("Could not visually locate the Instruction button. Skipping global instructions.")
             except Exception as e:
                 print(f"Failed to automate the instruction tab. Error: {e}")
 
