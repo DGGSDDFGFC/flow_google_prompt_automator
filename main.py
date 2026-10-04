@@ -131,10 +131,10 @@ async def generate_images():
                     const allBtns = Array.from(document.querySelectorAll('button, [role="button"]'))
                         .filter(e => e.offsetHeight > 0 && e.offsetWidth > 0);
                         
-                    // Get buttons strictly on the same horizontal row (+/- 50px of center)
+                    // Get buttons strictly on the same horizontal row (must vertically overlap with input field)
                     const rowBtns = allBtns.filter(b => {
                         const r = b.getBoundingClientRect();
-                        return Math.abs((r.top + r.height/2) - (inputRect.top + inputRect.height/2)) < 50;
+                        return !(r.bottom <= inputRect.top + 5 || r.top >= inputRect.bottom - 5);
                     });
                     
                     rowBtns.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
@@ -216,10 +216,10 @@ async def generate_images():
                     const allBtns = Array.from(document.querySelectorAll('button, [role="button"]'))
                         .filter(e => e.offsetHeight > 0 && e.offsetWidth > 0);
                         
-                    // Get buttons on the same horizontal row (+/- 50px of center)
+                    // Get buttons on the same horizontal row (must vertically overlap with input field)
                     const rowBtns = allBtns.filter(b => {
                         const r = b.getBoundingClientRect();
-                        return Math.abs((r.top + r.height/2) - (inputRect.top + inputRect.height/2)) < 50;
+                        return !(r.bottom <= inputRect.top + 5 || r.top >= inputRect.bottom - 5);
                     });
                     
                     // Sort left to right
