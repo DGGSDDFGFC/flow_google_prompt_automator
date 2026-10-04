@@ -228,24 +228,28 @@ async def generate_images():
                     await page.wait_for_timeout(1000)
                     
                     # 3. Select '1x' layout inside the panel
-                    # Note: There controls for both Image and Video ('x1' appears twice). We want the first one (Image).
-                    qty_btns = page.locator('button, [role="button"], [role="radio"]').filter(
-                        has_text=re.compile(r"^\s*x1\s*$|^\s*1x?\s*$|^\s*1 image\s*$", re.IGNORECASE)
-                    )
-                    if await qty_btns.count() > 0:
-                        await qty_btns.first.click(timeout=1000, force=True)
-                    else:
-                        try:
-                            await page.get_by_text("x1", exact=True).first.click(timeout=1000, force=True)
-                        except: pass
+                    try:
+                        x1_btns = page.get_by_text("x1", exact=True)
+                        if await x1_btns.count() > 0:
+                            await x1_btns.first.click(timeout=2000, force=True)
+                        else:
+                            alt_btns = page.get_by_text("1x", exact=True)
+                            if await alt_btns.count() > 0:
+                                await alt_btns.first.click(timeout=2000, force=True)
+                    except Exception as e:
+                        print("Failed to click x1:", e)
                     
                     await page.wait_for_timeout(500)
                     
                     # 4. Click the 'Save' button to apply the change
-                    save_btn = page.locator('button').filter(has_text=re.compile(r"^\s*Save\s*$", re.IGNORECASE)).first
-                    if await save_btn.is_visible():
-                        await save_btn.click(timeout=1000, force=True)
-                    else:
+                    try:
+                        save_btns = page.get_by_text("Save", exact=True)
+                        if await save_btns.count() > 0:
+                            await save_btns.last.click(timeout=2000, force=True)
+                        else:
+                            await page.keyboard.press("Escape")
+                    except Exception as e:
+                        print("Failed to click Save:", e)
                         await page.keyboard.press("Escape")
                 else:
                     print("Could not locate Settings button visually via row scanning.")
