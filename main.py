@@ -215,18 +215,27 @@ async def generate_images():
                 
                 try:
                     qty_btns = page.locator('button, [role="button"], [role="radio"], [role="option"]').filter(
-                        has_text=re.compile(r"^\s*1x?\s*$|^\s*1 image\s*$", re.IGNORECASE)
+                        has_text=re.compile(r"^\s*x1\s*$|^\s*1x?\s*$|^\s*1 image\s*$", re.IGNORECASE)
                     )
                     if await qty_btns.count() > 0:
                         await qty_btns.last.click(timeout=1000, force=True)
                     else:
-                        await page.get_by_text("1", exact=True).last.click(timeout=1000, force=True)
+                        await page.get_by_text("x1", exact=True).last.click(timeout=1000, force=True)
                 except:
                     pass
                     
                 await page.wait_for_timeout(500)
-                await page.keyboard.press("Escape")
-                await settings_btn.click(force=True)
+                try:
+                    save_btn = page.locator('button').filter(has_text=re.compile(r"^\s*Save\s*$", re.IGNORECASE)).first
+                    if await save_btn.is_visible():
+                        await save_btn.click(timeout=1000, force=True)
+                    else:
+                        await page.keyboard.press("Escape")
+                        await settings_btn.click(force=True)
+                except:
+                    await page.keyboard.press("Escape")
+                    await settings_btn.click(force=True)
+                    
                 await page.wait_for_timeout(500)
             except:
                 pass
