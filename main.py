@@ -317,7 +317,7 @@ async def generate_images():
             # 3. Wait for generation
             print("Checking if generation started...")
             started_generating = False
-            for _ in range(15): # Max 7.5 seconds
+            for _ in range(30): # Max 15 seconds
                 has_stop = await page.evaluate('''() => {
                     const btns = Array.from(document.querySelectorAll('button'));
                     return btns.some(b => (b.getAttribute('aria-label') || '').toLowerCase().includes('stop') ||
@@ -330,20 +330,20 @@ async def generate_images():
                 
             if started_generating:
                 print("Generating... Waiting for completion...")
-                for _ in range(120): # Max 60 seconds
+                for _ in range(360): # Max 3 minutes
                     still_generating = await page.evaluate('''() => {
                         const btns = Array.from(document.querySelectorAll('button'));
                         return btns.some(b => (b.getAttribute('aria-label') || '').toLowerCase().includes('stop') ||
                                               (b.getAttribute('title') || '').toLowerCase().includes('stop'));
                     }''')
                     if not still_generating:
-                        print("Generation finished visually! Waiting 3 seconds for images to settle...")
-                        await page.wait_for_timeout(3000)
+                        print("Generation finished visually! Waiting 4 seconds for images to settle...")
+                        await page.wait_for_timeout(4000)
                         break
                     await page.wait_for_timeout(500)
             else:
-                print("WARNING: Could not verify if it started generating! Executing a blind 25-second wait just to be safe!")
-                await page.wait_for_timeout(25000)
+                print("WARNING: Could not verify if it started generating! Executing a blind 45-second wait just to be safe!")
+                await page.wait_for_timeout(45000)
             
             # 4. Filter and download real images
             images = await page.locator('img').all()
@@ -358,7 +358,7 @@ async def generate_images():
                     pass
                 
             img_count = 1
-            for img in valid_images[-2:]: # Grab the user's latest images
+            for img in valid_images[-1:]: # Grab ONLY the last image since we enforce 1x setting
                 src = await img.get_attribute('src')
                 if src and (src.startswith('http') or src.startswith('data:image')):
                     filename = os.path.join(output_dir, f"prompt_{index+1}_img_{img_count}.jpg")
