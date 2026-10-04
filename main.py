@@ -184,61 +184,74 @@ async def generate_images():
             # --- ENFORCE SETTINGS EVERY PROMPT ---
             # Google Flow has a bug where it resets to 2x images mid-session. We force 1x every loop!
             try:
-                # Find icon-only buttons to avoid clicking suggestion chips (which contain text)
-                all_btns = await page.locator('button, [role="button"]').all()
-                icon_btns = []
-                for btn in all_btns:
-                    try:
-                        if not await btn.is_visible(): continue
-                        text = await btn.text_content()
-                        if not text or not text.strip():
-                            icon_btns.append(btn)
-                    except:
-                        pass
+                # 1. Provide an anchor: the input box itself
+                prompt_input = page.locator('div[contenteditable="true"]:visible, textarea:visible, input[type="text"]:visible').last 
+                await prompt_input.wait_for(state="visible", timeout=10000)
                 
-                settings_btn = None
-                for btn in icon_btns:
-                    try:
-                        lbl = (await btn.get_attribute('aria-label') or await btn.get_attribute('title') or "").lower()
-                        if any(kw in lbl for kw in ["setting", "option", "slider", "config"]):
-                            settings_btn = btn
-                            break
-                    except: pass
+                # 2. Run browser-side JS to find the settings button geographically (relative to the text input)
+                settings_btn_index = await page.evaluate('''() => {
+                    const inputDoms = Array.from(document.querySelectorAll('div[contenteditable="true"], textarea, input[type="text"]'))
+                        .filter(e => e.offsetHeight > 0 && e.offsetWidth > 0);
+                    if (inputDoms.length === 0) return -1;
+                    const mainInput = inputDoms[inputDoms.length - 1];
+                    const inputRect = mainInput.getBoundingClientRect();
                     
-                if not settings_btn and len(icon_btns) >= 2:
-                    # Fallback to the second to last icon-only button (usually +, Settings, Send)
-                    settings_btn = icon_btns[-2]
+                    const allBtns = Array.from(document.querySelectorAll('button, [role="button"]'))
+                        .filter(e => e.offsetHeight > 0 && e.offsetWidth > 0);
+                        
+                    // Get buttons on the same horizontal row (+/- 50px of center)
+                    const rowBtns = allBtns.filter(b => {
+                        const r = b.getBoundingClientRect();
+                        return Math.abs((r.top + r.height/2) - (inputRect.top + inputRect.height/2)) < 50;
+                    });
                     
-                if settings_btn:
+                    // Sort left to right
+                    rowBtns.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+                    
+                    // Find the one with keywords
+                    let targetBtn = rowBtns.find(b => {
+                        const lbl = (b.getAttribute('aria-label') || b.getAttribute('title') || b.innerText || '').toLowerCase();
+                        return ["setting", "agent", "slider", "config", "option"].some(kw => lbl.includes(kw));
+                    });
+                    
+                    // Fallback to second-to-last button on the row (usually: +, Input, Settings, Send)
+                    if (!targetBtn && rowBtns.length >= 2) {
+                        targetBtn = rowBtns[rowBtns.length - 2];
+                    }
+                    
+                    return allBtns.indexOf(targetBtn);
+                }''')
+                
+                if settings_btn_index != -1:
+                    settings_btn = page.locator('button, [role="button"]').nth(settings_btn_index)
                     await settings_btn.click(timeout=3000, force=True)
                     await page.wait_for_timeout(1000)
-                
-                try:
-                    qty_btns = page.locator('button, [role="button"], [role="radio"], [role="option"]').filter(
+                    
+                    # 3. Select '1x' layout inside the panel
+                    qty_btns = page.locator('button, [role="button"], [role="radio"]').filter(
                         has_text=re.compile(r"^\s*x1\s*$|^\s*1x?\s*$|^\s*1 image\s*$", re.IGNORECASE)
                     )
                     if await qty_btns.count() > 0:
                         await qty_btns.last.click(timeout=1000, force=True)
                     else:
-                        await page.get_by_text("x1", exact=True).last.click(timeout=1000, force=True)
-                except:
-                    pass
+                        try:
+                            await page.get_by_text("x1", exact=True).last.click(timeout=1000, force=True)
+                        except: pass
                     
-                await page.wait_for_timeout(500)
-                try:
+                    await page.wait_for_timeout(500)
+                    
+                    # 4. Click the 'Save' button to apply the change
                     save_btn = page.locator('button').filter(has_text=re.compile(r"^\s*Save\s*$", re.IGNORECASE)).first
                     if await save_btn.is_visible():
                         await save_btn.click(timeout=1000, force=True)
                     else:
                         await page.keyboard.press("Escape")
-                        await settings_btn.click(force=True)
-                except:
-                    await page.keyboard.press("Escape")
-                    await settings_btn.click(force=True)
+                else:
+                    print("Could not locate Settings button visually via row scanning.")
                     
-                await page.wait_for_timeout(500)
-            except:
-                pass
+            except Exception as e:
+                print(f"Error enforcing settings: {e}")
+                await page.keyboard.press("Escape")
             # -------------------------------------
 
             # 1. Locate the main chat input
