@@ -184,23 +184,32 @@ async def generate_images():
             # --- ENFORCE SETTINGS EVERY PROMPT ---
             # Google Flow has a bug where it resets to 2x images mid-session. We force 1x every loop!
             try:
-                svg_btns = page.locator('button, [role="button"]')
-                count = await svg_btns.count()
-                settings_btn = None
-                
-                for i in range(count):
+                # Find icon-only buttons to avoid clicking suggestion chips (which contain text)
+                all_btns = await page.locator('button, [role="button"]').all()
+                icon_btns = []
+                for btn in all_btns:
                     try:
-                        btn = svg_btns.nth(i)
                         if not await btn.is_visible(): continue
+                        text = await btn.text_content()
+                        if not text or not text.strip():
+                            icon_btns.append(btn)
+                    except:
+                        pass
+                
+                settings_btn = None
+                for btn in icon_btns:
+                    try:
                         lbl = (await btn.get_attribute('aria-label') or await btn.get_attribute('title') or "").lower()
                         if any(kw in lbl for kw in ["setting", "option", "slider", "config"]):
                             settings_btn = btn
                             break
                     except: pass
                     
-                if not settings_btn:
-                    print("Could not find the settings button. Skipping enforcement to avoid clicking wrong elements.")
-                else:
+                if not settings_btn and len(icon_btns) >= 2:
+                    # Fallback to the second to last icon-only button (usually +, Settings, Send)
+                    settings_btn = icon_btns[-2]
+                    
+                if settings_btn:
                     await settings_btn.click(timeout=3000, force=True)
                     await page.wait_for_timeout(1000)
                 
